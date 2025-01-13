@@ -15,8 +15,8 @@ BROADCAST_ANNOUNCEMENT_TIME = 1.0
 
 class Server:
 
-    def __init__(self, ip, broadcast_port, tcp_port, udp_port):
-        self.ip = ip
+    def __init__(self, broadcast_ip, broadcast_port, tcp_port, udp_port):
+        self.broadcast_ip = broadcast_ip
         self.broadcast_port = broadcast_port
 
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -30,7 +30,7 @@ class Server:
 
         host_ip = socket.gethostbyname(socket.gethostname())
         print(f"Server started on host IP: {host_ip}")
-        print(f"  Broadcasting to {self.ip}:{self.broadcast_port}")
+        print(f"  Broadcasting to {self.broadcast_ip}:{self.broadcast_port}")
         print(f"  Listening TCP on port {self.actual_tcp_port}")
         print(f"  Listening UDP on port {self.actual_udp_port}")
 
@@ -48,10 +48,10 @@ class Server:
                 '>IBHH',
                 MAGIC_COOKIE,
                 MESSAGE_TYPE_OFFER,
-                self.actual_udp_port,
-                self.actual_tcp_port
+                self.actual_tcp_port,
+                self.actual_udp_port
             )
-            self.udp_socket.sendto(offer_packet, (self.ip, self.broadcast_port))
+            self.udp_socket.sendto(offer_packet, (self.broadcast_ip, self.broadcast_port))
             time.sleep(BROADCAST_ANNOUNCEMENT_TIME)
 
     def _accept_tcp_connections(self):
@@ -114,7 +114,54 @@ class Server:
             except Exception as e:
                 print(f"[UDP] Error receiving requests: {e}")
 
-
     def _send_udp_data(self, file_size: int, client_addr):
+        chunk_data_size = 1024
+        total_segments = (file_size + chunk_data_size - 1) // chunk_data_size
+
+        bytes_sent = 0
+        for segment_idx in range(total_segments):
+            start_index = segment_idx * chunk_data_size
+            end_index = min(start_index + chunk_data_size, file_size)
+            chunk_len = end_index - start_index
+
+            header = struct.pack(
+                '>IBQQ',
+                MAGIC_COOKIE,
+                MESSAGE_TYPE_PAYLOAD,
+                total_segments,
+                segment_idx
+            )
+
+            payload = random.randbytes(chunk_len)
+
+            self.udp_socket.sendto(header + payload, client_addr)
+            bytes_sent += chunk_len
+
+        print(f"[UDP] Sent {bytes_sent} bytes to {client_addr}")
 
 
+def main():
+    parser = argparse.ArgumentParser(
+        description="SpeedTest Server - broadcasts offers and handles TCP/UDP transfers."
+    )
+    parser.add_argument('--broadcast-ip', type=str, default='255.255.255.255',
+                        help='IP address for UDP broadcast (default: 255.255.255.255)')
+    parser.add_argument('--broadcast-port', type=int, default=13117,
+                        help='Port for broadcasting UDP offers (default: 13117)')
+    parser.add_argument('--tcp-port', type=int, default=0,
+                        help='TCP port to listen on, 0 for ephemeral (default: 0)')
+    parser.add_argument('--udp-port', type=int, default=0,
+                        help='UDP port to listen on, 0 for ephemeral (default: 0)')
+    args = parser.parse_args()
+
+    server = Server(
+        broadcast_ip=args.broadcast_ip,
+        broadcast_port=args.broadcast_port,
+        tcp_port=args.tcp_port,
+        udp_port=args.udp_port
+    )
+    server.start()
+
+
+if __name__ == "__main__":
+    main()
