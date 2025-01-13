@@ -13,7 +13,6 @@ MESSAGE_TYPE_PAYLOAD = 0x4
 BROADCAST_ANNOUNCEMENT_TIME = 1.0
 
 
-
 class Server:
 
     def __init__(self, ip, broadcast_port, tcp_port, udp_port):
